@@ -1,0 +1,8 @@
+ci/
+cmake-out/
+cmake-build-debug/
+cmake-build-release/
+google/cloud/bigtable/quickstart/
+google/cloud/pubsub/quickstart/
+google/cloud/spanner/quickstart/
+google/cloud/storage/quickstart/
