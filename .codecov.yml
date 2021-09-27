@@ -1,0 +1,7 @@
+# Disable commit statuses
+coverage:
+  range: 90..100
+  status:
+    project: off
+    patch: off
+
