@@ -1,0 +1,107 @@
+# Copyright 2021 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+options:
+  machineType: 'N1_HIGHCPU_32'
+  diskSizeGb: '512'
+  dynamic_substitutions: true
+  env: [ 'HOME=/h', 'TZ=UTC0', 'GOOGLE_CLOUD_BUILD=yes' ]
+  volumes:
+    - name: 'home'
+      path: '/h'
+
+# Variables that can be overridden from the `gcloud builds ...` command using
+# the `--substitutions=_FOO=bar` flag.
+substitutions:
+  _DISTRO: 'unknown'
+  _BUILD_NAME: 'unknown'
+  _CACHE_BUCKET: '${PROJECT_ID}_cloudbuild'
+  _CACHE_TYPE: '${_PR_NUMBER:-main}'
+  _IMAGE: 'cloudbuild/${_DISTRO}'
+
+timeout: 3600s
+
+steps:
+  # Builds the docker image that will be used by the main build step.
+- name: 'gcr.io/kaniko-project/executor:edge'
+  args: [
+    '--context=dir:///workspace/ci',
+    '--dockerfile=ci/cloudbuild/${_DISTRO}.Dockerfile',
+    '--cache=true',
+    '--destination=gcr.io/${PROJECT_ID}/${_IMAGE}:${BUILD_ID}',
+  ]
+
+  # Restores the homedir cache into /h in parallel with the previous step.
+- name: 'gcr.io/cloud-builders/gsutil'
+  waitFor: [ '-' ]
+  entrypoint: '/workspace/ci/cloudbuild/cache.sh'
+  dir: '/h'
+  args: [
+    'restore',
+    '--bucket_url=gs://${_CACHE_BUCKET}/build-cache/google-cloud-cpp',
+    '--key=${_CACHE_TYPE}/${_DISTRO}-${_BUILD_NAME}/h',
+    '--fallback_key=main/${_DISTRO}-${_BUILD_NAME}/h'
+  ]
+
+  # Runs the specified build in the image that was created in the first step.
+- name: 'gcr.io/${PROJECT_ID}/${_IMAGE}:${BUILD_ID}'
+  entrypoint: 'ci/cloudbuild/build.sh'
+  args: [ '--local', '${_BUILD_NAME}' ]
+  env: [
+    'BAZEL_REMOTE_CACHE=https://storage.googleapis.com/${_CACHE_BUCKET}/bazel-cache/${_DISTRO}-${_BUILD_NAME}',
+    'VCPKG_BINARY_SOURCES=x-gcs,gs://${_CACHE_BUCKET}/vcpkg-cache/${_DISTRO}-${_BUILD_NAME},readwrite'
+  ]
+
+  # Caches some directories in the homedir, in the specified GCS bucket.
+- name: 'gcr.io/cloud-builders/gsutil'
+  entrypoint: '/workspace/ci/cloudbuild/cache.sh'
+  dir: '/h'
+  args: [
+    'save',
+    '--bucket_url=gs://${_CACHE_BUCKET}/build-cache/google-cloud-cpp',
+    '--key=${_CACHE_TYPE}/${_DISTRO}-${_BUILD_NAME}/h',
+    '--path=.ccache',
+    '--path=.cache/ccache',
+    '--path=.cache/vcpkg',
+    '--path=.cache/google-cloud-cpp'
+  ]
+
+  # Remove the images created by this build.
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  entrypoint: 'bash'
+  args:
+    - '-c'
+    - |
+      set +e
+      gcloud container images delete -q gcr.io/${PROJECT_ID}/${_IMAGE}:${BUILD_ID}
+      exit 0
+
+  # The previous step may not run if the build fails. Garbage collect any
+  # images created by this script, and/or similar scripts in this repository.
+  # The main idea is to remove images created over 4 weeks ago. Because the
+  # current builds create images with current timestamps, such images are not
+  # likely to be in use. This step should not break the build on error, and it
+  # can start running as soon as the build does.
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  waitFor: [ '-' ]
+  entrypoint: 'bash'
+  args:
+    - '-c'
+    - |
+      set +e
+      gcloud container images list-tags gcr.io/${PROJECT_ID}/${_IMAGE} \
+        --format='get(digest)' --filter='timestamp.datetime < -P4W' | \
+        xargs -r printf "gcr.io/${PROJECT_ID}/${_IMAGE}@%s\n" | \
+        xargs -r -P 4 -L 32 gcloud container images delete -q --force-delete-tags
+      exit 0

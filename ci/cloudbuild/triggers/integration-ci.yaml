@@ -1,0 +1,10 @@
+filename: ci/cloudbuild/cloudbuild.yaml
+github:
+  name: google-cloud-cpp
+  owner: googleapis
+  push:
+    branch: ^master$
+name: integration-ci
+substitutions:
+  _BUILD_NAME: integration
+  _DISTRO: fedora

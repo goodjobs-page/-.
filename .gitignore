@@ -1,0 +1,30 @@
+# Common build output directory names
+.build/
+_build/
+build-output/
+build-out/
+cmake-out/
+
+# Common bazel output directories
+bazel-*
+!bazel-*.cfg
+
+# Used by some IDEs and LSP plugins
+compile_commands.json
+
+# Backup files for Emacs
+*~
+
+# Ignore IDEA / IntelliJ files
+.idea/
+cmake-build-*/
+
+# Ignore Visual Studio Code files
+.vsbuild/
+.vscode/
+
+# Ignore staging files for the ci/kokoro/install builds
+ci/kokoro/install/ccache-contents/
+
+google/cloud/storage/emulator/**/__pycache__/
+google/cloud/storage/emulator/**/*.pyc
