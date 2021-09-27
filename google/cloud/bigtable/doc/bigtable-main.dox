@@ -1,0 +1,111 @@
+/*!
+@mainpage Google Cloud Platform Bigtable C++ Client Library
+
+# Overview
+
+Cloud Bigtable is Google's NoSQL Big Data database service. It's the same
+database that powers many core Google services, including Search, Analytics,
+Maps, and Gmail.
+
+The Cloud Bigtable C++ Client library offers types and functions
+to access Cloud Bigtable from C++11 applications
+([Read more about Cloud Bigtable][read-more-about-gcp-bigtable]).
+It offers access to the Cloud Bigtable API, including operations to list, read,
+write, and delete [Instances and Clusters][read-instances-clusters],
+[Tables][read-tables] and [Application Profiles][read-app-profiles].
+
+## Quickstart
+
+The following instructions show you how to perform basic tasks in Cloud Bigtable
+using the C++ client library.
+
+### Before you begin
+
+1. Select or create a Google Cloud Platform (GCP) project using the
+   [manage resource page][resource-link]. Make a note of the project id, you
+   will need to use it later.
+2. Make sure that [billing is enabled][billing-link] for your project.
+3. Learn about [key terms and concepts][concepts-link] for Cloud Spanner.
+4. Setup the authentication for the examples:
+   - [Configure a service account][authentication-quickstart],
+   - or [login with your personal account][gcloud-quickstart]
+
+### Setting up your repo
+
+In order to use the Cloud Bigtable C++ client library from your own code, you'll
+need to configure your build system how to fetch and compile the Cloud C++
+client library. The Cloud C++ client library natively supports the
+[Bazel](https://bazel.build/) and [CMake](https://cmake.org/) build systems.
+We've created a minimal, "Hello world", [quickstart repo][quickstart-link] that
+includes detailed instructions on how to compile the library for use in your
+application. You can fetch the source from [GitHub][github-link] as normal:
+
+@code{.sh}
+git clone https://github.com/googleapis/google-cloud-cpp.git
+cd google-cloud-cpp/google/cloud/bigtable/quickstart
+@endcode
+
+@par Example: Quickstart
+
+The following shows the code that you'll run in the
+`google/cloud/bigtable/quickstart/` directory,
+which should give you a taste of the Cloud Bigtable C++ client library API.
+
+@include quickstart.cc
+
+## API Notes
+
+- `GOOGLE_CLOUD_CPP_ENABLE_CLOG=yes` turns on logging in the library, basically
+  the library always "logs" but the logging infrastructure has no backend to
+  actually print anything until the application sets a backend or they set this
+  environment variable.
+
+- `GOOGLE_CLOUD_PROJECT=...` is used in examples and integration tests to
+  configure the GCP project.
+
+- `BIGTABLE_EMULATOR_HOST=host:port` tells the library to connect to the
+  specified emulator rather than the default endpoint.
+
+- `GOOGLE_CLOUD_CPP_ENABLE_TRACING=rpc` turns on tracing for most gRPC
+  calls, the library injects an additional Stub decorator that prints each gRPC
+  request and response.
+
+- `GOOGLE_CLOUD_CPP_TRACING_OPTIONS=...` modifies the behavior of gRPC tracing,
+  including whether messages will be output on multiple lines, or whether
+  string/bytes fields will be truncated.
+
+## Next Steps
+
+- @ref bigtable-hello-world "Hello World Example"
+
+- @ref bigtable-hello-instance-admin "Hello World for Instance Admin Example"
+
+- @ref bigtable-hello-table-admin "Hello World for Table Admin Example"
+
+- @ref bigtable-samples-data-client "Advanced Reading and Writing Example"
+
+- @ref bigtable-samples-grpc-credentials "Examples for using various gRPC Credential Classes with Cloud Bigtable C++ client"
+
+[read-more-about-gcp-bigtable]: https://cloud.google.com/bigtable/docs/ 'Read more about GCP Bigtable'
+[read-instances-clusters]: https://cloud.google.com/bigtable/docs/instances-clusters-nodes 'Instances and Clusters'
+[read-tables]: https://cloud.google.com/bigtable/docs/overview 'Tables'
+[read-app-profiles]: https://cloud.google.com/bigtable/docs/app-profiles 'Application Profiles'
+
+[cbt-quickstart]: https://cloud.google.com/bigtable/docs/quickstarts 'Cloud Bigtable Quickstarts'
+[resource-link]: https://console.cloud.google.com/cloud-resource-manager 'Console Resource Manager'
+[billing-link]: https://cloud.google.com/billing/docs/how-to/modify-project 'How to: Modify Project'
+[enable-api-link]: https://cloud.google.com/apis/docs/enable-disable-apis 'How to: Enable APIs'
+[concepts-link]: https://cloud.google.com/bigtable/docs/concepts 'Cloud Bigtable Concepts'
+[authentication-quickstart]: https://cloud.google.com/docs/authentication/getting-started 'Authentication Getting Started'
+[authentication-overview]: https://cloud.google.com/docs/authentication/
+[gcloud-quickstart]: https://cloud.google.com/sdk/docs/quickstarts
+[user-account]: https://cloud.google.com/docs/authentication/
+
+[github-link]: https://github.com/googleapis/google-cloud-cpp 'GitHub Repository'
+[workspace-definition-link]: https://docs.bazel.build/versions/master/build-ref.html#packages_targets
+
+<!-- The ugly %2E disables auto-linking in Doxygen -->
+[github-readme]:  https://github.com/googleapis/google-cloud-cpp/blob/master/README%2Emd
+[github-install]: https://github.com/googleapis/google-cloud-cpp/blob/master/INSTALL%2Emd
+
+*/

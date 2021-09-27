@@ -1,0 +1,171 @@
+// Copyright 2020 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#include "generator/internal/predicate_utils.h"
+#include "google/cloud/log.h"
+#include "google/cloud/optional.h"
+#include "generator/internal/descriptor_utils.h"
+#include <google/api/client.pb.h>
+#include <google/longrunning/operations.pb.h>
+#include <string>
+
+namespace google {
+namespace cloud {
+namespace generator_internal {
+
+using ::google::protobuf::Descriptor;
+using ::google::protobuf::FieldDescriptor;
+using ::google::protobuf::MethodDescriptor;
+
+bool HasLongrunningMethod(google::protobuf::ServiceDescriptor const& service) {
+  for (int i = 0; i < service.method_count(); ++i) {
+    if (IsLongrunningOperation(*service.method(i))) return true;
+  }
+  return false;
+}
+
+bool HasPaginatedMethod(google::protobuf::ServiceDescriptor const& service) {
+  for (int i = 0; i < service.method_count(); ++i) {
+    if (IsPaginated(*service.method(i))) return true;
+  }
+  return false;
+}
+
+bool HasMessageWithMapField(
+    google::protobuf::ServiceDescriptor const& service) {
+  for (int i = 0; i < service.method_count(); ++i) {
+    const auto* const request = service.method(i)->input_type();
+    const auto* const response = service.method(i)->output_type();
+    for (int j = 0; j < request->field_count(); ++j) {
+      if (request->field(j)->is_map()) {
+        return true;
+      }
+    }
+    for (int k = 0; k < response->field_count(); ++k) {
+      if (response->field(k)->is_map()) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+bool HasStreamingReadMethod(
+    google::protobuf::ServiceDescriptor const& service) {
+  for (int i = 0; i < service.method_count(); ++i) {
+    if (IsStreamingRead(*service.method(i))) return true;
+  }
+  return false;
+}
+
+// https://google.aip.dev/client-libraries/4233
+google::cloud::optional<std::pair<std::string, std::string>>
+DeterminePagination(google::protobuf::MethodDescriptor const& method) {
+  std::string paginated_type;
+  Descriptor const* request_message = method.input_type();
+  FieldDescriptor const* page_size =
+      request_message->FindFieldByName("page_size");
+  if (!page_size || page_size->type() != FieldDescriptor::TYPE_INT32) return {};
+  FieldDescriptor const* page_token =
+      request_message->FindFieldByName("page_token");
+  if (!page_token || page_token->type() != FieldDescriptor::TYPE_STRING)
+    return {};
+
+  Descriptor const* response_message = method.output_type();
+  FieldDescriptor const* next_page_token =
+      response_message->FindFieldByName("next_page_token");
+  if (!next_page_token ||
+      next_page_token->type() != FieldDescriptor::TYPE_STRING)
+    return {};
+
+  std::vector<std::tuple<std::string, Descriptor const*, int>>
+      repeated_message_fields;
+  std::vector<std::pair<std::string, std::string>> repeated_string_fields;
+  for (int i = 0; i < response_message->field_count(); ++i) {
+    FieldDescriptor const* field = response_message->field(i);
+    if (field->is_repeated() &&
+        field->type() == FieldDescriptor::TYPE_MESSAGE) {
+      repeated_message_fields.emplace_back(std::make_tuple(
+          field->name(), field->message_type(), field->number()));
+    }
+    if (field->is_repeated() && field->type() == FieldDescriptor::TYPE_STRING) {
+      repeated_string_fields.emplace_back(
+          std::make_pair(field->name(), "string"));
+    }
+  }
+
+  if (repeated_message_fields.empty()) {
+    // Add exception to AIP-4233 for response types that have exactly one
+    // repeated field that is of primitive type string.
+    if (repeated_string_fields.size() != 1) return {};
+    return repeated_string_fields[0];
+  }
+
+  if (repeated_message_fields.size() > 1) {
+    auto min_field = std::min_element(
+        repeated_message_fields.begin(), repeated_message_fields.end(),
+        [](std::tuple<std::string, Descriptor const*, int> const& lhs,
+           std::tuple<std::string, Descriptor const*, int> const& rhs) {
+          return std::get<2>(lhs) < std::get<2>(rhs);
+        });
+    int min_field_number = std::get<2>(*min_field);
+    if (min_field_number != std::get<2>(repeated_message_fields[0])) {
+      GCP_LOG(FATAL) << "Repeated field in paginated response must be first "
+                        "appearing and lowest field number: "
+                     << method.full_name() << std::endl;
+      std::exit(1);
+    }
+  }
+  return std::make_pair(std::get<0>(repeated_message_fields[0]),
+                        std::get<1>(repeated_message_fields[0])->full_name());
+}
+
+bool IsPaginated(google::protobuf::MethodDescriptor const& method) {
+  return DeterminePagination(method).has_value();
+}
+
+bool IsNonStreaming(google::protobuf::MethodDescriptor const& method) {
+  return !method.client_streaming() && !method.server_streaming();
+}
+
+bool IsStreamingRead(google::protobuf::MethodDescriptor const& method) {
+  return !method.client_streaming() && method.server_streaming();
+}
+
+bool IsLongrunningOperation(google::protobuf::MethodDescriptor const& method) {
+  return method.output_type()->full_name() == "google.longrunning.Operation";
+}
+
+bool IsResponseTypeEmpty(google::protobuf::MethodDescriptor const& method) {
+  return method.output_type()->full_name() == "google.protobuf.Empty";
+}
+
+bool IsLongrunningMetadataTypeUsedAsResponse(
+    google::protobuf::MethodDescriptor const& method) {
+  if (method.output_type()->full_name() == "google.longrunning.Operation") {
+    auto operation_info =
+        method.options().GetExtension(google::longrunning::operation_info);
+    return operation_info.response_type() == "google.protobuf.Empty";
+  }
+  return false;
+}
+
+bool HasRoutingHeader(google::protobuf::MethodDescriptor const& method) {
+  auto result = ParseResourceRoutingHeader(method);
+  return result.has_value();
+}
+
+}  // namespace generator_internal
+}  // namespace cloud
+}  // namespace google
